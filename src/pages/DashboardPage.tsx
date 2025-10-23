@@ -1,16 +1,60 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { User, Wallet, Heart, Search, TrendingUp, Star, Shield } from 'lucide-react';
 import { mockUser, mockMarketData } from '../data/mockData';
+import { useWallet } from '../context/WalletContext';
 
 interface DashboardPageProps {
-  walletConnected: boolean;
-  onConnectWallet: () => void;
+  walletConnected?: boolean;
+  onConnectWallet?: () => Promise<void> | void;
 }
 
-export const DashboardPage: React.FC<DashboardPageProps> = ({ 
-  walletConnected, 
-  onConnectWallet 
+const shorten = (addr?: string) => (addr ? `${addr.slice(0, 6)}...${addr.slice(-4)}` : '');
+
+export const DashboardPage: React.FC<DashboardPageProps> = ({
+  walletConnected: _propWalletConnected,
+  onConnectWallet: propOnConnect,
 }) => {
+  const { account, connectMetaMask, disconnect } = useWallet();
+  const [status, setStatus] = useState<'idle' | 'connecting' | 'no_metamask' | 'error'>('idle');
+
+  const isConnected = Boolean(account);
+
+  const connect = async () => {
+    setStatus('connecting');
+    try {
+      if (propOnConnect) {
+        await propOnConnect();
+      } else {
+        await connectMetaMask();
+      }
+      setStatus('idle');
+    } catch (err: any) {
+      // MetaMask not installed detection
+      if (err?.code === 'NO_METAMASK' || String(err?.message || '').toLowerCase().includes('metamask')) {
+        setStatus('no_metamask');
+      } else if (err?.code === 4001) {
+        // user rejected
+        setStatus('idle');
+      } else {
+        setStatus('error');
+      }
+    }
+  };
+
+  const handleDisconnect = () => {
+    disconnect();
+    setStatus('idle');
+  };
+
+  const copyAddress = async () => {
+    if (!account) return;
+    try {
+      await navigator.clipboard.writeText(account);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50/30 to-blue-50/30 relative overflow-hidden">
       {/* Background Elements */}
@@ -19,13 +63,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
       <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(135deg,transparent_0%,rgba(59,130,246,0.02)_50%,transparent_100%)]"></div>
       <div className="absolute top-10 right-10 w-72 h-72 bg-gradient-to-bl from-indigo-200/20 to-transparent rounded-full blur-3xl animate-pulse"></div>
       <div className="absolute bottom-10 left-10 w-96 h-96 bg-gradient-to-tr from-purple-200/20 to-transparent rounded-full blur-3xl animate-pulse delay-1000"></div>
-      
+
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8 relative z-10">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
-            Dashboard
-          </h1>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Dashboard</h1>
           <p className="text-xl text-gray-600">
             Welcome back, {mockUser.name}! Here's your property portfolio overview.
           </p>
@@ -67,11 +109,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Wallet Status</p>
-                <p className={`text-sm font-semibold ${walletConnected ? 'text-emerald-600' : 'text-red-600'}`}>
-                  {walletConnected ? 'Connected' : 'Disconnected'}
+                <p className={`text-sm font-semibold ${isConnected ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {isConnected ? 'Connected' : 'Disconnected'}
                 </p>
               </div>
-              <Wallet className={`w-8 h-8 ${walletConnected ? 'text-emerald-500' : 'text-gray-400'}`} />
+              <Wallet className={`w-8 h-8 ${isConnected ? 'text-emerald-500' : 'text-gray-400'}`} />
             </div>
           </div>
         </div>
@@ -90,7 +132,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     <p className="text-sm text-gray-600">Modern Downtown Loft • 2 hours ago</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-3 p-4 bg-emerald-50 rounded-lg">
                   <Search className="w-5 h-5 text-emerald-500" />
                   <div className="flex-1">
@@ -98,7 +140,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     <p className="text-sm text-gray-600">Downtown Apartments • 1 day ago</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center space-x-3 p-4 bg-purple-50 rounded-lg">
                   <Shield className="w-5 h-5 text-purple-500" />
                   <div className="flex-1">
@@ -114,7 +156,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
               <h3 className="text-xl font-semibold mb-6">Saved Searches</h3>
               <div className="space-y-4">
                 {mockUser.savedSearches.map((search) => (
-                  <div key={search.id} className="border border-gray-200/50 bg-white/50 rounded-lg p-4 hover:border-blue-300 hover:bg-white/80 transition-all duration-300 cursor-pointer backdrop-blur-sm">
+                  <div
+                    key={search.id}
+                    className="border border-gray-200/50 bg-white/50 rounded-lg p-4 hover:border-blue-300 hover:bg-white/80 transition-all duration-300 cursor-pointer backdrop-blur-sm"
+                  >
                     <div className="flex justify-between items-start">
                       <div>
                         <h4 className="font-medium text-gray-900 mb-1">{search.name}</h4>
@@ -126,9 +171,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                         </div>
                         <div className="text-xs text-gray-500 mt-1">Created {search.createdAt}</div>
                       </div>
-                      <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                        Run Search
-                      </button>
+                      <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">Run Search</button>
                     </div>
                   </div>
                 ))}
@@ -141,30 +184,59 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
             {/* Wallet Section */}
             <div className="bg-white/90 backdrop-blur-sm rounded-xl shadow-xl border border-white/20 p-6">
               <h3 className="text-xl font-semibold mb-6">Wallet Connection</h3>
-              {walletConnected ? (
+              {isConnected ? (
                 <div className="space-y-4">
                   <div className="flex items-center space-x-3">
                     <div className="w-3 h-3 bg-emerald-500 rounded-full"></div>
                     <span className="text-emerald-600 font-medium">Wallet Connected</span>
                   </div>
                   <div className="text-sm text-gray-600 break-all bg-gray-50 p-3 rounded-lg">
-                    0x742d35cc6634C0532925a3b8D6aD8a7e15b2a9d1
+                    <div className="flex items-center justify-between">
+                      <div className="font-mono">{shorten(account)}</div>
+                      <div className="text-xs text-gray-400 ml-2">({account})</div>
+                    </div>
                   </div>
-                  <button className="w-full border border-red-300 text-red-600 hover:bg-red-50 py-2 px-4 rounded-lg transition-colors">
-                    Disconnect Wallet
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={copyAddress}
+                      className="flex-1 border border-gray-200 text-gray-700 hover:bg-gray-50 py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Copy Address
+                    </button>
+                    <button
+                      onClick={handleDisconnect}
+                      className="flex-1 border border-red-300 text-red-600 hover:bg-red-50 py-2 px-4 rounded-lg transition-colors"
+                    >
+                      Disconnect Wallet
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-4">
                   <div className="text-center py-6">
                     <Wallet className="w-12 h-12 text-gray-400 mx-auto mb-3" />
                     <p className="text-gray-600 mb-4">Connect your wallet to access NFT properties and blockchain features.</p>
-                    <button
-                      onClick={onConnectWallet}
-                      className="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold transition-all duration-300"
-                    >
-                      Connect Wallet
-                    </button>
+
+                    <div className="space-y-3">
+                      <button
+                        onClick={connect}
+                        disabled={status === 'connecting'}
+                        className="w-full bg-gradient-to-r from-blue-600 to-emerald-500 hover:from-blue-700 hover:to-emerald-600 text-white py-3 px-4 rounded-lg font-semibold transition-all duration-300"
+                      >
+                        {status === 'connecting' ? 'Connecting…' : 'Connect Wallet'}
+                      </button>
+
+                      {status === 'no_metamask' && (
+                        <p className="text-sm text-gray-700">
+                          MetaMask not detected. Please install it from{' '}
+                          <a href="https://metamask.io/" target="_blank" rel="noreferrer" className="text-blue-600 underline">
+                            metamask.io
+                          </a>
+                        </p>
+                      )}
+
+                      {status === 'error' && <p className="text-sm text-red-600">Connection failed. Please try again.</p>}
+                    </div>
                   </div>
                 </div>
               )}
@@ -198,35 +270,29 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({
                     <TrendingUp className="w-4 h-4 text-emerald-600" />
                     <span className="font-medium text-emerald-800">Market Up</span>
                   </div>
-                  <p className="text-sm text-emerald-700">
-                    Property values increased {mockMarketData.monthlyGrowth} this quarter
-                  </p>
+                  <p className="text-sm text-emerald-700">Property values increased {mockMarketData.monthlyGrowth} this quarter</p>
                 </div>
-                
+
                 <div className="p-4 bg-blue-50/80 backdrop-blur-sm rounded-lg border border-blue-100/50">
                   <div className="flex items-center space-x-2 mb-2">
                     <Shield className="w-4 h-4 text-blue-600" />
                     <span className="font-medium text-blue-800">NFT Growth</span>
                   </div>
-                  <p className="text-sm text-blue-700">
-                    {mockMarketData.nftProperties} NFT properties available
-                  </p>
+                  <p className="text-sm text-blue-700">{mockMarketData.nftProperties} NFT properties available</p>
                 </div>
-                
+
                 <div className="p-4 bg-purple-50/80 backdrop-blur-sm rounded-lg border border-purple-100/50">
                   <div className="flex items-center space-x-2 mb-2">
                     <TrendingUp className="w-4 h-4 text-purple-600" />
                     <span className="font-medium text-purple-800">Top Location</span>
                   </div>
-                  <p className="text-sm text-purple-700">
-                    {mockMarketData.topLocations[0].name} - {mockMarketData.topLocations[0].avgPrice} avg
-                  </p>
+                  <p className="text-sm text-purple-700">{mockMarketData.topLocations[0].name} - {mockMarketData.topLocations[0].avgPrice} avg</p>
                 </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </div> 
     </div>
   );
 };
